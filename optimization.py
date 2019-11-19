@@ -140,3 +140,73 @@ class LISGD:
             loss.append(np.mean([f.f(x, d) for d in dataset]))
         return x, average/self.T, loss
             
+
+
+class SGD:
+    """Vanilla SGD, for lipschitz, beta smooth, alpha sc and beta smooth, and strongly convex and lipschitz"""
+    def __init__(self, L, alpha, beta, D, T, n, sigma, sc=False, Lipschitz = True, smooth=False):
+        """
+        Args:
+          L: Lipschitz coefficient
+          alpha: strong convexity
+          beta: smoothness 
+          sigma: variance bound on the gradient
+          T: number of iterations
+          n = size of dataset
+          sc = whether or not the loss function is strongly convex
+        """
+        self.L = L
+        self.alpha = alpha
+        self.beta = beta 
+        self.D = D
+        self.T = T 
+        self.n = n
+        self.sigma = sigma
+        self.sc = sc
+        self.Lipschitz = Lipschitz 
+        self.smooth = smooth 
+
+    def learning_rate(self):
+
+        if self.Lipschitz:
+            if not self.sc and not self.smooth:
+                eta = [self.D / np.sqrt(self.sigma**2+self.L**2)/ np.sqrt(self.T)] * self.T
+            elif self.smooth and not self.sc:
+                c = np.sqrt(2)*self.sigma/self.D
+                eta = [1/(self.beta + c*np.sqrt(self.T))]*self.T
+            elif self.sc and not self.smooth:
+                eta = 1/self.alpha/np.arange(1, self.T+1)
+            elif self.sc and self.smooth:
+                eta = [np.log(self.T)/self.alpha/self.T]*self.T
+            else:
+                raise ValueError("There is no combination for lipschitz, strongly convex and smooth")
+        else:
+            raise ValueError("We are not considering non-lipschitz cases")
+        assert len(eta) == self.T
+        return eta
+    
+    def run(self, f, dataset, init_x):
+        """
+        Runs the LISGD algorithm
+        Returns a tuple of (last iterate, overall average, loss)
+        """
+        loss = []
+        # initialize x
+        x = init_x 
+        alpha = self.learning_rate()
+
+        average = 0
+        for t in range(self.T):
+            idx = np.random.choice(self.n)
+            # Take a gradient step
+            grad_fi = f.grad_f(x, dataset[idx])
+            x -= alpha[t]*grad_fi
+            # Projection
+            if np.linalg.norm(x) > self.D/2:
+                x = x/np.linalg.norm(x)*self.D/2
+            # update the average
+            average += x
+
+            # Record the overall loss
+            loss.append(np.mean([f.f(x, d) for d in dataset]))
+        return x, average/self.T, loss
